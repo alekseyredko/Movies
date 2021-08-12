@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Movies.BusinessLogic.Results;
 
 namespace Movies.Infrastructure.Extensions
@@ -14,6 +15,12 @@ namespace Movies.Infrastructure.Extensions
 
                 case ResultType.NotValid:
                     return controllerBase.BadRequest(response);
+
+                case ResultType.Forbidden:
+                    return controllerBase.StatusCode(StatusCodes.Status403Forbidden, response);
+
+                case ResultType.Unauthorized:
+                    return controllerBase.Unauthorized(response);
 
                 case ResultType.Unexpected:
                     return controllerBase.BadRequest(response);

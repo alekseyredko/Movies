@@ -30,16 +30,35 @@ namespace Movies.Infrastructure.Services
             this.authConfiguration = authConfiguration.Value;
         }        
 
-        public async Task<Result<TokenResponse>> RefreshTokenAsync(string token)
+        public async Task<Result> RefreshTokenAsync(string token, HttpResponse response)
         {
-            var result = new Result<TokenResponse>();
-            await ResultHandler.TryExecuteAsync(result, RefreshTokenAsync(token, result));
+            var result = new Result();
+            await ResultHandler.TryExecuteAsync(result, RefreshTokenAsync(token, response, result));
             return result;
         }
 
-        protected async Task<Result<TokenResponse>> RefreshTokenAsync(string request, Result<TokenResponse> result)
+        protected async Task<Result> RefreshTokenAsync(string request, HttpResponse response, Result result)
         {
             var getToken = await unitOfWork.RefreshTokens.GetRefreshTokenByTokenValue(request);
+
+            await CheckAndRevokeToken(getToken, result);
+
+            var user = await unitOfWork.RefreshTokens.GetUserByRefreshToken(getToken.RefreshTokenId);
+            if (user == null)
+            {
+                ResultHandler.SetAccountNotFound(nameof(user.UserId), result);
+            }
+
+            if (result.ResultType != ResultType.Ok)
+            {
+                return result;
+            }
+            
+            return await GenerateAndWriteTokensToResponseAsync(user.UserId, response);            
+        }
+
+        protected async Task<Result> CheckAndRevokeToken(RefreshToken getToken, Result result)
+        {         
             if (getToken == null || getToken.IsRevoked || getToken.IsExpired)
             {
                 ResultHandler.SetForbidden("RefreshToken", result);
@@ -49,45 +68,41 @@ namespace Movies.Infrastructure.Services
             if (getToken.Expires <= DateTime.UtcNow)
             {
                 getToken.IsExpired = true;
-                unitOfWork.RefreshTokens.Update(getToken);
-                await unitOfWork.SaveAsync();
-
                 ResultHandler.SetForbidden("RefreshToken", result);
-                return result;
-            }
+            }            
 
-            var user = await unitOfWork.RefreshTokens.GetUserByRefreshToken(getToken.RefreshTokenId);
-            if (user == null)
-            {
-                getToken.IsRevoked = true;
-                unitOfWork.RefreshTokens.Update(getToken);
-                await unitOfWork.SaveAsync();
+            getToken.IsRevoked = true;
+            unitOfWork.RefreshTokens.Update(getToken);
+            await unitOfWork.SaveAsync();
 
-                ResultHandler.SetAccountNotFound(nameof(user.UserId), result);
-                return result;
-            }           
-
-            return await GenerateTokenPairAsync(user.UserId);            
-        }
-
-        public async Task<Result> DeleteCookiesFromClient(HttpResponse response)
-        {
-            var result = new Result();
-            await ResultHandler.TryExecuteAsync(result, DeleteCookiesFromClient(response, result));
             return result;
         }
 
-        protected async Task<Result> DeleteCookiesFromClient(HttpResponse response, Result result)
+        public async Task<Result> DeleteCookiesFromClient(HttpRequest request, HttpResponse response)
         {
-            return await Task.Run(() =>
+            var result = new Result();
+            await ResultHandler.TryExecuteAsync(result, DeleteCookiesFromClient(request, response, result));
+            return result;
+        }
+
+        protected async Task<Result> DeleteCookiesFromClient(HttpRequest request, HttpResponse response, Result result)
+        {
+            var token = request.Cookies["Refresh"];            
+            var getToken = await unitOfWork.RefreshTokens.GetRefreshTokenByTokenValue(token);
+
+            await CheckAndRevokeToken(getToken, result);           
+
+            if (result.ResultType != ResultType.Ok)
             {
-                response.Cookies.Delete("Refresh");
-                response.Cookies.Delete("Token");
-
-                ResultHandler.SetOk(result);
-
                 return result;
-            });
+            }
+
+            response.Cookies.Delete("Refresh");
+            response.Cookies.Delete("Token");
+
+            ResultHandler.SetOk(result);
+
+            return result;
         }
 
         public async Task<Result> GenerateAndWriteTokensToResponseAsync(int id, HttpResponse response)
@@ -114,9 +129,9 @@ namespace Movies.Infrastructure.Services
 
                 var сookieOptions = new CookieOptions
                 {
-                    HttpOnly = true,
+                    HttpOnly = false,
                     Expires = DateTime.UtcNow.AddMinutes(authConfiguration.RefreshTokenLifetimeInMinutes)
-                };
+                };                
 
                 response.Cookies.Append("Refresh", result.Value.RefreshToken, refreshCookieOptions);
                 response.Cookies.Append("Token", result.Value.Token, сookieOptions);
@@ -201,7 +216,7 @@ namespace Movies.Infrastructure.Services
                 authConfiguration.Audience,
                 claims,
                 expires: DateTime.Now.AddMinutes(authConfiguration.TokenLifeTimeInMinutes),
-                signingCredentials: credentials);
+                signingCredentials: credentials);            
 
             return new JwtSecurityTokenHandler().WriteToken(token);
         }

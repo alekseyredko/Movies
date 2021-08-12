@@ -29,9 +29,11 @@ namespace Movies.BusinessLogic.Results
             {
                 //TODO: log exception
                 System.Diagnostics.Debug.WriteLine(e.Message);
+                Console.WriteLine(e.Message);
                 if (e.InnerException!=null)
                 {
                     System.Diagnostics.Debug.WriteLine(e.InnerException.Message);
+                    Console.WriteLine(e.Message);
                 }
                 result.ResultType = ResultType.Unexpected;
                 result.Title = "Sorry, please try again later!";
