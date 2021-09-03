@@ -1,0 +1,216 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
+using AutoMapper;
+using Microsoft.AspNetCore.Components.Authorization;
+using Movies.BusinessLogic.Results;
+using Movies.BusinessLogic.Services.Interfaces;
+using Movies.Infrastructure.Models;
+using Movies.Infrastructure.Services.Interfaces;
+using System.IO;
+using Movies.Infrastructure.Models.Producer;
+using Movies.Infrastructure.Models.User;
+using Movies.Infrastructure.Models.Reviewer;
+using Movies.Domain.Models;
+using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage;
+
+namespace Movies.Blazor.BlazorWeb.Services
+{
+    public class CustomAuthentication: ICustomAuthentication
+    {
+        private readonly AuthenticationStateProvider authenticationHandlerProvider;
+        private readonly IMapper _mapper;
+        private readonly IUserService _userService;
+        private readonly IProducerService _producerService;
+        private readonly IReviewService _reviewService;
+        private readonly ProtectedLocalStorage _localStorage;
+
+        public CustomAuthentication(AuthenticationStateProvider authenticationHandlerProvider, 
+            IMapper mapper, 
+            IUserService userService, 
+            ProtectedLocalStorage localStorage, 
+            IProducerService producerService, 
+            IReviewService reviewService)
+        {
+            this.authenticationHandlerProvider = authenticationHandlerProvider;
+            _mapper = mapper;
+            _userService = userService;
+            _localStorage = localStorage;
+            _producerService = producerService;
+            _reviewService = reviewService;
+        }
+
+        public async Task<Result<LoginUserResponse>> TryLoginAsync(LoginUserRequest request)
+        {
+            var mapped = _mapper.Map<LoginUserRequest, User>(request);
+            var result = await _userService.LoginAsync(mapped);
+            var mappedResult = _mapper.Map<Result<User>, Result<LoginUserResponse>>(result);
+
+            if (result.ResultType == ResultType.Ok)
+            {
+                await SetAuthenticationStateAsync(result.Value.UserId);
+            }
+
+            return mappedResult;
+        }
+
+        public async Task<Result<RegisterUserResponse>> TryRegisterAsync(RegisterUserRequest request)
+        {
+            var mapped = _mapper.Map<RegisterUserRequest, User>(request);
+            var result = await _userService.RegisterAsync(mapped);
+            var mappedResult = _mapper.Map<Result<User>, Result<RegisterUserResponse>>(result);
+
+            if (result.ResultType == ResultType.Ok)
+            {
+                await SetAuthenticationStateAsync(result.Value.UserId);      
+            }
+
+            return mappedResult;
+        }
+
+        protected async Task<Result<User>> GetCurrentUserAsync()
+        {
+            var user = new Result<User>
+            {
+                ResultType =  ResultType.Unauthorized
+            };
+
+            var state = await authenticationHandlerProvider.GetAuthenticationStateAsync();
+
+            if (state.User != null)
+            {
+                var claim = state.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier);
+
+                if (claim != null)
+                {
+                    if (int.TryParse(claim.Value, out int id))
+                    {
+                        user = await _userService.GetUserAccountAsync(id);
+                        return user;
+                    }
+                }
+                else
+                {
+                    user.ResultType = ResultType.Unauthorized;
+                }
+            }
+
+            return user;
+        }
+
+        public async Task<Result<GetUserResponse>> GetCurrentUserDataAsync()
+        {
+            var user = new Result<User>
+            {
+                ResultType = ResultType.Unauthorized
+            };
+
+            var state = await authenticationHandlerProvider.GetAuthenticationStateAsync();
+
+            if (state.User != null)
+            {
+                var claim = state.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier);
+
+                if (claim != null)
+                {
+                    if (int.TryParse(claim.Value, out int id))
+                    {
+                        user = await _userService.GetUserAccountAsync(id);                        
+                    }
+                }
+                else
+                {
+                    user.ResultType = ResultType.Unauthorized;
+                }
+            }
+
+            return _mapper.Map<Result<User>, Result<GetUserResponse>>(user);
+        }
+
+        private async Task SetAuthenticationStateAsync(int id, params Claim[] addClaims)
+        {          
+            var roles = await _userService.GetUserRolesAsync(id);                
+            var claims = new List<Claim> { new Claim(ClaimTypes.NameIdentifier, id.ToString()) };
+
+            foreach (var role in roles)
+            {
+                claims.Add(new Claim(ClaimTypes.Role, Enum.GetName(role)));
+            }
+
+            if (roles.Contains(UserRoles.Reviewer))
+            {
+                var reviewer = await _reviewService.GetReviewerAsync(id);
+                if (reviewer != null && reviewer.ResultType == ResultType.Ok)
+                {
+                    var nickClaim = new Claim("Nickname", reviewer.Value.NickName);
+                    claims.Add(nickClaim);
+                }
+            }
+
+            var identity = new ClaimsIdentity(claims, "custom");
+            var user = new ClaimsPrincipal(identity);
+            //authenticationHandlerProvider.SetAuthenticationState(Task.FromResult(new AuthenticationState(user)));
+            
+            using (var stream = new MemoryStream())
+            {
+                using (var writer = new BinaryWriter(stream))
+                {
+                    user.WriteTo(writer);              
+                } 
+
+                await _localStorage.SetAsync("user", stream.ToArray());      
+            }
+        }
+
+        public async Task<Result> LogoutAsync()
+        {                      
+            await _localStorage.DeleteAsync("user");
+
+            var user = new ClaimsPrincipal();
+
+            var result = new Result();
+            ResultHandler.SetOk(result);
+
+            return result;
+            //authenticationHandlerProvider.SetAuthenticationState(Task.FromResult(new AuthenticationState(user)));
+        }
+
+        public async Task<Result<ProducerResponse>> TryRegisterAsProducerAsync(ProducerRequest request)
+        {
+            var currentUser = await GetCurrentUserAsync();            
+
+            var producer = _mapper.Map<ProducerRequest, Producer>(request);
+            producer.ProducerId = currentUser.Value.UserId;
+
+            var result = await _producerService.AddProducerAsync(producer);
+            var response = _mapper.Map<Result<Producer>, Result<ProducerResponse>>(result);
+
+            if (result.ResultType == ResultType.Ok)
+            {
+                await SetAuthenticationStateAsync(result.Value.ProducerId);
+            }
+
+            return response;
+        }
+
+        public async Task<Result<RegisterReviewerResponse>> TryRegisterAsReviewerAsync(RegisterReviewerRequest request)
+        {
+            var currentUser = await GetCurrentUserAsync();
+
+            var reviewer = _mapper.Map<RegisterReviewerRequest, Reviewer>(request);
+            reviewer.ReviewerId = currentUser.Value.UserId;
+
+            var result = await _reviewService.AddReviewerAsync(reviewer);
+            var response = _mapper.Map<Result<Reviewer>, Result<RegisterReviewerResponse>>(result);
+
+            if (result.ResultType == ResultType.Ok)
+            {                
+                await SetAuthenticationStateAsync(result.Value.ReviewerId);
+            }
+
+            return response;
+        }
+    }
+}

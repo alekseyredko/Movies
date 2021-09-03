@@ -1,0 +1,11 @@
+﻿@typeparam TItem
+@typeparam TResult
+
+@namespace Movies.Blazor.Components.Shared.InputTemplate
+
+<form>
+    @foreach (var renderFragment in RenderFragments)
+    {
+        <div>@renderFragment</div>
+    }
+</form>
