@@ -1,0 +1,5 @@
+﻿{
+  "ConnectionStrings": {
+    "DefaultConnection": "Data Source=MSQL-03467;Initial Catalog=MoviesDB;Integrated Security=True"
+  }
+}
