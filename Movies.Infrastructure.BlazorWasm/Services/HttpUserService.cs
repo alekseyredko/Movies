@@ -31,7 +31,7 @@ namespace Movies.Infrastructure.BlazorWasm.Services
 
         protected async Task<Result> DeleteAccountAsync(int id, Result result)
         {
-            await httpResultService.DeleteAsync($"Users/account/{id}", result);
+            await httpResultService.SendRequestAsync($"Users/account/{id}", "DELETE", result);
 
             return result;
         }
@@ -45,7 +45,7 @@ namespace Movies.Infrastructure.BlazorWasm.Services
 
         protected async Task<Result<User>> GetUserAccountAsync(int id, Result<User> result)
         {
-            await httpResultService.GetAsync<User>($"Users/account/{id}", true, result);
+            await httpResultService.SendRequestAsync($"Users/account", "GET", result);
 
             return result;
         }
@@ -64,7 +64,7 @@ namespace Movies.Infrastructure.BlazorWasm.Services
 
         protected async Task<Result<User>> LoginAsync(User user, Result<User> result)
         {
-            await httpResultService.PostAsync<User>("Users/account/login", user, result);
+            await httpResultService.SendRequestAsync("Users/account/login", user, "POST", result);
             
             return result;
         }

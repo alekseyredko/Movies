@@ -49,7 +49,7 @@ namespace Movies.Infrastructure.BlazorWasm.Services
 
         protected async Task<Result<IEnumerable<Movie>>> GetAllMoviesAsync(Result<IEnumerable<Movie>> result)
         {
-            await httpResultService.GetAsync<IEnumerable<Movie>>("Movies", false, result);
+            await httpResultService.SendRequestAsync<IEnumerable<Movie>>("Movies", "GET", result);
 
             return result;
         }
@@ -74,7 +74,7 @@ namespace Movies.Infrastructure.BlazorWasm.Services
 
         public async Task<Result<Movie>> GetMovieAsync(int id, Result<Movie> result)
         {
-            await httpResultService.GetAsync($"Movies/{id}", false, result);
+            await httpResultService.SendRequestAsync($"Movies/{id}", "GET", result);
 
             return result;
         }
@@ -90,7 +90,7 @@ namespace Movies.Infrastructure.BlazorWasm.Services
         protected async Task<Result<IEnumerable<Movie>>> GetMoviesByProducerIdAsync(int producerId, 
             Result<IEnumerable<Movie>> result)
         {
-            await httpResultService.GetAsync<IEnumerable<Movie>>($"Producers/{producerId}/movies", false, result);
+            await httpResultService.SendRequestAsync<IEnumerable<Movie>>($"Producers/{producerId}/movies", "GET", result);
             return result;
         }
 

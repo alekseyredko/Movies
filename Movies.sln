@@ -23,7 +23,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Movies.DataAccess", "Movies
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Movies.Infrastructure.Application", "Movies.Infrastructure.Application\Movies.Infrastructure.Application.csproj", "{E19208F9-4DC7-4B3E-9016-524E49F1A550}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Movies.Infrastructure.BlazorWasm", "Movies.Infrastructure.BlazorWasm\Movies.Infrastructure.BlazorWasm.csproj", "{CE698893-B112-420E-AA7A-697CF611BD53}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Movies.Infrastructure.BlazorWasm", "Movies.Infrastructure.BlazorWasm\Movies.Infrastructure.BlazorWasm.csproj", "{CE698893-B112-420E-AA7A-697CF611BD53}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

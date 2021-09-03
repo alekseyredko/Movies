@@ -47,11 +47,11 @@ namespace Movies.Infrastructure.BlazorWasm.Services
                 ResultType = ResultType.Unauthorized
             };
 
-            var state = await authenticationHandlerProvider.GetAuthenticationStateAsync();
+            var state = await authenticationHandlerProvider.GetAuthenticationStateAsync();            
 
-            if (state.User != null)
-            {
-                var claim = state.User.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier);
+            if (state.User.Identity.IsAuthenticated)
+            {               
+                var claim = state.User.Claims.FirstOrDefault(x => x.Type == "sub");
 
                 if (claim != null)
                 {
@@ -88,6 +88,12 @@ namespace Movies.Infrastructure.BlazorWasm.Services
             var mapped = mapper.Map<User>(request);
             var result = await userService.LoginAsync(mapped);
             var mappedResult = mapper.Map<Result<LoginUserResponse>>(result);
+
+            if (mappedResult.ResultType == ResultType.Ok)
+            {
+                (authenticationHandlerProvider as UserAuthStateProvider).Notify();
+            }
+
             return mappedResult;
         }
 

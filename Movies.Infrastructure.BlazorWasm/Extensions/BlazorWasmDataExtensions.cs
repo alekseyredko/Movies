@@ -16,6 +16,8 @@ namespace Movies.Infrastructure.BlazorWasm.Extensions
         {                       
             serviceCollection.AddScoped<IUserService, HttpUserService>();
             serviceCollection.AddScoped<IMovieService, HttpMovieService>();
+            serviceCollection.AddScoped<IProducerService, HttpProducerService>();
+            serviceCollection.AddScoped<IReviewService, HttpReviewService>();
         }
     }
 }

@@ -16,7 +16,6 @@ namespace Movies.Infrastructure.BlazorWasm.Services
     {        
         private readonly HttpClient httpClient;
         private readonly IConfiguration configuration;
-        //private readonly HttpOptions httpOptions;
         private readonly string baseUri;
 
         public HttpResultService(HttpClient httpClient, IConfiguration configuration)
@@ -24,57 +23,39 @@ namespace Movies.Infrastructure.BlazorWasm.Services
             this.httpClient = httpClient;
             this.configuration = configuration;
 
-            //httpOptions = this.configuration.GetValue<HttpOptions>(HttpOptions.Position);
+            
             baseUri = configuration["ServerEndpoint"];
         }
 
-        public async Task<Result<T>> GetAsync<T>(string endpoint, bool withCredentials = false)
+        public async Task<Result<T1>> SendRequestAsync<T1>(string endpoint, string method, Result<T1> result)
         {
-            var result = new Result<T>();
-            await ResultHandler.TryExecuteAsync(result, GetAsync<T>(endpoint, withCredentials, result));
+            var response = await SendAsync(endpoint, method);
+
+            await DeserializeAsync(result, response);
+
             return result;
-        }
+        }        
 
-        public async Task<Result<T>> GetAsync<T>(string endpoint, bool withCredentials, Result<T> result)
+        public async Task<Result<T1>> SendRequestAsync<T, T1>(string endpoint, T request, string method, Result<T1> result)
         {
-            var response = new HttpResponseMessage();
-            if (withCredentials)
-            {
-                var message = new HttpRequestMessage
-                {
-                    Method = new HttpMethod("Get"),
-                    RequestUri = new Uri(baseUri + endpoint)
-                };
+            var response = await SendAsync(endpoint, request, method);
 
-                response = await httpClient.SendAsync(message);
-            }
+            await DeserializeAsync(result, response);
 
-            else
-            {
-                response = await httpClient.GetAsync(endpoint);
-            }
+            return result;
+        }       
+
+        public async Task<Result> SendRequestAsync(string endpoint, string method, Result result)
+        {
+            var response = await SendAsync(endpoint, method);
 
             await DeserializeAsync(result, response);
 
             return result;
         }
 
-        public async Task<Result<T>> PostAsync<T>(string endpoint, T request)
+        private async Task<HttpResponseMessage> SendAsync(string endpoint, string method, JsonContent content = null)
         {
-            var result = new Result<T>();
-            await ResultHandler.TryExecuteAsync(result, PostAsync(endpoint, request, result));
-            return result;
-        }       
-
-        public async Task<Result<T>> PostAsync<T>(string endpoint, T request, Result<T> result)
-        {
-            return await SendRequestAsync(endpoint, request, "POST", result);
-        }
-
-        public async Task<Result<T1>> SendRequestAsync<T, T1>(string endpoint, T request, string method, Result<T1> result)
-        {
-            var content = JsonContent.Create<T>(request);
-
             var requestMessage = new HttpRequestMessage()
             {
                 Method = new HttpMethod(method),
@@ -85,56 +66,26 @@ namespace Movies.Infrastructure.BlazorWasm.Services
             requestMessage.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
 
             var response = await httpClient.SendAsync(requestMessage);
-
-            await DeserializeAsync(result, response);
-
-            return result;
+            return response;
         }
 
-        public async Task<Result> SendRequestAsync(string endpoint, string method, Result result)
+        private async Task<HttpResponseMessage> SendAsync<T>(string endpoint, T request, string method)
         {
-            var requestMessage = new HttpRequestMessage()
-            {
-                Method = new HttpMethod(method),
-                RequestUri = new Uri($"{baseUri}/{endpoint}")
-            };
+            var content = JsonContent.Create<T>(request);
 
-            requestMessage.SetBrowserRequestCredentials(BrowserRequestCredentials.Include);
-
-            var response = await httpClient.SendAsync(requestMessage);
-
-            await DeserializeAsync(result, response);
-
-            return result;
-        }
-
-        public async Task<Result<T>> PutAsync<T>(string endpoint, T request)
-        {
-            var result = new Result<T>();
-            await ResultHandler.TryExecuteAsync(result, PutAsync(endpoint, request, result));
-            return result;
-        }
-
-        public async Task<Result<T>> PutAsync<T>(string endpoint, T request, Result<T> result)
-        {
-            return await SendRequestAsync(endpoint, request, "PUT", result);
-        }
-
-        public async Task<Result> DeleteAsync(string endpoint)
-        {
-            var result = new Result();
-            await ResultHandler.TryExecuteAsync(result, PutAsync(endpoint, result));
-            return result;
-        }
-
-        public async Task<Result> DeleteAsync(string endpoint, Result result)
-        {
-            return await SendRequestAsync(endpoint, "Delete", result);
+            return await SendAsync(endpoint, method, content);
         }
 
         public async Task DeserializeAsync<T>(Result<T> result, HttpResponseMessage response)
         {
             var responseContent = await response.Content.ReadAsStringAsync();
+
+            if (responseContent == null)
+            {
+                result.ResultType = ResultType.Unexpected;
+                return;
+            }           
+
             var deserialized = JsonConvert.DeserializeObject<Result<T>>(responseContent);
 
             result.Title = deserialized.Title;
@@ -150,6 +101,13 @@ namespace Movies.Infrastructure.BlazorWasm.Services
         public async Task DeserializeAsync(Result result, HttpResponseMessage response)
         {
             var responseContent = await response.Content.ReadAsStringAsync();
+
+            if (responseContent == null)
+            {
+                result.ResultType = ResultType.Unexpected;
+                return;
+            }
+            
             var deserialized = JsonConvert.DeserializeObject<Result>(responseContent);
 
             result.Title = deserialized.Title;
@@ -158,6 +116,25 @@ namespace Movies.Infrastructure.BlazorWasm.Services
             {
                 result.Errors.Add(item.Key, item.Value);
             }
+        }
+
+        public async Task<Result> TryRefreshTokenAsync()
+        {
+            var result = new Result();
+
+            var getTokenResult = await SendAsync("Users/account/refresh-token", "POST");
+
+            if (getTokenResult.IsSuccessStatusCode)
+            {
+                result.ResultType = ResultType.Ok;
+            }
+
+            else
+            {
+                result.ResultType = ResultType.Forbidden;
+            }
+
+            return result;
         }
     }
 }

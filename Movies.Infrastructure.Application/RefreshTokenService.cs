@@ -130,7 +130,7 @@ namespace Movies.Infrastructure.Services
                 var сookieOptions = new CookieOptions
                 {
                     HttpOnly = false,
-                    Expires = DateTime.UtcNow.AddMinutes(authConfiguration.RefreshTokenLifetimeInMinutes)
+                    Expires = DateTime.UtcNow.AddMinutes(authConfiguration.TokenLifeTimeInMinutes)
                 };                
 
                 response.Cookies.Append("Refresh", result.Value.RefreshToken, refreshCookieOptions);
